@@ -167,6 +167,7 @@ void Mixer_SetSoundData(const uint8_t *data, int size) {
 	if (!_lock(1)) return;
 	_smp = data + 4;
 	_smp_size = size - 4;
+	(void)_smp_size;
 
 	int offset = 0;
 	int prev_end = 0;

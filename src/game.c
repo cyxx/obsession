@@ -84,7 +84,7 @@ static void start_game() {
 	g_vars.balls_count = BALLS_COUNT;
 	g_vars.special_next = 1;
 	g_vars.kickback_enabled = 1;
-	g_vars.state.bonus_multiplier_hold = 0;
+	g_vars.bonus_multiplier_hold = 0;
 }
 
 extern void clear_mission_state();
@@ -254,7 +254,7 @@ void table_update() {
 	}
 
 	++g_vars.random_num;
-	if (g_vars.game_over_tilt != 0 && g_vars.game_over_tilt > 1) {
+	if (g_vars.game_over_tilt == 1) {
 		g_vars.jingle_order_num = 64;
 		g_vars.state.special_mode = 5;
 		if (g_vars.music_order_num != 46) {
@@ -309,7 +309,7 @@ void table_update() {
 		if (g_vars.ball_xpos2 >= 306 && g_vars.ball_ypos2 >= 441 && g_vars.ball_ypos2 <= 450) {
 
 			const int n0 = ABS(g_vars.ball_yvel);
-			if (n0 < 20) {
+			if (n0 <= 20) {
 				g_vars.ball_ypos2 = 442;
 			}
 		}

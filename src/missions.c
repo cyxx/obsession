@@ -49,18 +49,18 @@ static void skill_shot() {
 		if (g_vars.game_over_tilt == 0) {
 			g_vars.jingle_order_num = 57;
 		}
-		g_vars.skill_shot_score_index += 4;
-		if (g_vars.skill_shot_score_index > 16) {
-			g_vars.skill_shot_score_index = 16;
-		}
 		static const uint32_t scores[] = {
-			BCD_100_000 ,
+			BCD_100_000,
 			BCD_250_000,
 			BCD_500_000,
 			BCD_1_000_000,
 			BCD_2_000_000,
 		};
 		score_bcd(scores[g_vars.skill_shot_score_index / 4]);
+		g_vars.skill_shot_score_index += 4;
+		if (g_vars.skill_shot_score_index > 16) {
+			g_vars.skill_shot_score_index = 16;
+		}
 	}
 }
 
@@ -123,7 +123,7 @@ void special_award_events(uint32_t bonus_active, uint32_t zero) {
 			if ((flags & 1) != 0) {
 				g_vars.state.lane_a_lit = 1;
 				light_set1(0x26);
-				if (g_vars.state.lane_b_lit != 0 && g_vars.state.bonus_multiplier_hold == 0) {
+				if (g_vars.state.lane_b_lit != 0 && g_vars.bonus_multiplier_hold == 0) {
 					g_vars.state.lanes_complete_flag = 1;
 					light_set2(0x46);
 					light_set2(0x62);
@@ -131,7 +131,7 @@ void special_award_events(uint32_t bonus_active, uint32_t zero) {
 			} else {
 				g_vars.state.lane_b_lit = 1;
 				light_set1(0x28);
-				if (g_vars.state.lane_a_lit != 0 && g_vars.state.bonus_multiplier_hold == 0) {
+				if (g_vars.state.lane_a_lit != 0 && g_vars.bonus_multiplier_hold == 0) {
 					g_vars.state.lanes_complete_flag = 1;
 					light_set2(0x46);
 					light_set2(0x62);
@@ -258,10 +258,6 @@ bonus_data_0_8:
 			if (g_vars.state.special_mode == 0) {
 				g_vars.jingle_order_num = 66;
 			}
-			++g_vars.state.sea_score_index;
-			if (g_vars.state.sea_score_index > 9) {
-				g_vars.state.sea_score_index = 9;
-			}
 			static const uint32_t scores[] = {
 				BCD_25_000,
 				BCD_50_000,
@@ -275,6 +271,10 @@ bonus_data_0_8:
 				BCD_3_000_000,
 			};
 			bonus_score1_bcd(scores[g_vars.state.sea_score_index]);
+			++g_vars.state.sea_score_index;
+			if (g_vars.state.sea_score_index > 9) {
+				g_vars.state.sea_score_index = 9;
+			}
 			score_bcd(BCD_250_000);
 		} else {
 			score_bcd(BCD_10_000);
@@ -360,7 +360,7 @@ bonus_data_8_16:
 		score_bcd(BCD_100_000);
 		if (g_vars.state.lanes_complete_flag != 0) {
 			g_vars.state.lanes_complete_flag = zero;
-			g_vars.state.bonus_multiplier_hold = 1;
+			g_vars.bonus_multiplier_hold = 1;
 			light_set1(0x46);
 			light_set5(0x62);
 			if (g_vars.state.special_mode == 0) {
@@ -478,7 +478,7 @@ bonus_data_8_16:
 		goto special_done;
 	}
 
-	if (g_vars.bonus_data[11] != 0 && g_vars.state.special_bonus_data_num != 11) {
+	if (g_vars.bonus_data[11] == 1 && g_vars.state.special_bonus_data_num != 11) {
 		g_vars.state.special_bonus_data_num = 11;
 		g_vars.led_animation_ptr = Resource_GetData(g_vars.res, RES_LED_SHRIMP_ATTACK, 0);
 		g_vars.led_panel_animation_style_flag = 1;
@@ -567,14 +567,14 @@ bonus_data_8_16:
 	flags = g_vars.bonus_data[12];
 	if (flags != 0 && g_vars.state.special_bonus_data_num != 12) {
 		g_vars.state.special_bonus_data_num = 12;
+		score_bcd(BCD_100_000);
+		bonus_score1_bcd(BCD_50_000);
 		if (g_vars.state.special_mode == 0) {
-			score_bcd(BCD_100_000);
-			bonus_score1_bcd(BCD_50_000);
 			g_vars.jingle_order_num = 55;
 		}
 		n = g_vars.deep_ramp_counter + 1;
 		if (n == 10) {
-			g_vars.deep_ramp_counter = n;
+			g_vars.deep_ramp_counter = 0;
 			goto start_dive_mission;
 		}
 
@@ -708,7 +708,7 @@ start_dive_mission:
 				g_vars.jingle_order_num = 54;
 				g_vars.state.special_mode = 0;
 			}
-			g_vars.ball_exit_locked_counter = 80;
+			g_vars.ball_exit_locked_counter += 80;
 			g_vars.state.pearl_bonus_timer = 1;
 			if (g_vars.pearl_double_bonus == 0) {
 				g_vars.led_animation_ptr = Resource_GetData(g_vars.res, RES_LED_THREE, 0);
@@ -767,6 +767,7 @@ start_dive_mission:
 
 	if (g_vars.bonus_data[15] != 0 && g_vars.state.special_bonus_data_num != 15) {
 		g_vars.state.special_bonus_data_num = 15;
+		g_vars.bonus_activation_flags[3] = 1;
 
 		g_vars.sound_num = 26;
 		g_vars.sound_volume = 56;
@@ -1110,7 +1111,7 @@ special_done:
 after_special_award:
 
 	n = g_vars.score_bcd / 100;
-	if ((n / 10000) % 100 != 0 && (n % 10000) == 0) {
+	if ((n / 10000) % 100 != 0 && (n % 10000) == 0 && (g_vars.score_bcd % 100) == 0) {
 		if (g_vars.state.million_point_bonus_flag == 0) {
 			g_vars.state.million_point_bonus_flag = 1;
 			light_set2(0x64);

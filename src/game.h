@@ -338,8 +338,8 @@ struct vars_t {
 		int16_t special_bonus_data_num;
 		int16_t safe_ball_lit;
 		int16_t special_mode;
-		int16_t bonus_multiplier_hold;
 	} state;
+	int16_t bonus_multiplier_hold;
 
 	int16_t bonus_activation_flags[10];
 	int16_t deep_ramp_counter;

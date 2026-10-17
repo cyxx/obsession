@@ -92,6 +92,7 @@ static void load_music(const uint8_t *data) {
 
 	p = &data[8 + val];
 	_music_restart_pos = p;
+	(void)_music_restart_pos;
 
 	p = data + 8;
 	while ((int16_t)READ_BE_UINT16(p++) != -8888);

@@ -1,7 +1,11 @@
 
 #include <SDL.h>
+#ifndef __EMSCRIPTEN__
 #include <getopt.h>
 #include <sys/stat.h>
+#else
+#include <emscripten.h>
+#endif
 #include "host.h"
 #include "mixer.h"
 #include "render.h"
@@ -12,6 +16,7 @@ struct Host g_host;
 
 static const char NAME[] = "Pinball Obsession - Aquatic Adventure";
 
+#ifndef __EMSCRIPTEN__
 static const char USAGE[] =
 	"%s\n"
 	"Usage: %s [OPTIONS]...\n"
@@ -19,11 +24,15 @@ static const char USAGE[] =
 	"  --scrolling       Enable vertical scrolling\n"
 	"  --fullscreen      Stretch window resolution to desktop\n"
 ;
+#endif
 
 static SDL_Window *g_window;
 static SDL_Renderer *_renderer;
 static SDL_PixelFormat *_fmt;
 static ResourcesData g_data;
+static int g_window_w;
+static int g_window_h;
+static bool g_scroll;
 
 static SDL_Texture *_textures[DRAW_SURFACE_COUNT];
 static int _texturesCount;
@@ -42,11 +51,13 @@ static int CreateSurface565(int w, int h) {
 	return handle;
 }
 
+#ifndef __EMSCRIPTEN__
 static int DestroySurface565(int handle) {
 	SDL_DestroyTexture(_textures[handle]);
 	_textures[handle] = 0;
 	return 0;
 }
+#endif
 
 static int LockSurface565(int handle, uint16_t **p, int *pitch) {
 	SDL_Texture *t = _textures[handle];
@@ -95,7 +106,6 @@ static void InitAudio() {
 	desired.userdata = 0;
 	if (SDL_OpenAudio(&desired, 0) == 0) {
 		SDL_PauseAudio(0);
-		Mixer_Init(AUDIO_SAMPLE_RATE, LockAudio);
 	}
 }
 
@@ -103,6 +113,17 @@ static void FiniAudio() {
 	Mixer_Fini();
 	SDL_CloseAudio();
 }
+
+#ifdef __EMSCRIPTEN__
+static bool g_audio_started;
+
+static void EnsureAudio() {
+	if (!g_audio_started) {
+		g_audio_started = true;
+		InitAudio();
+	}
+}
+#endif
 
 static void Debug(const char *fmt, ...) {
 	char buf[1024];
@@ -131,11 +152,152 @@ static void Error(const char *fmt, ...) {
 	fprintf(stdout, "ERROR: %s\n", buf);
 }
 
+static void HandleEvents() {
+	SDL_Event ev;
+	while (SDL_PollEvent(&ev)) {
+		switch (ev.type) {
+		case SDL_QUIT:
+			g_host.quit = 1;
+			break;
+		case SDL_KEYDOWN:
+#ifdef __EMSCRIPTEN__
+			EnsureAudio();
+#endif
+			switch (ev.key.keysym.sym) {
+			case SDLK_j:
+				g_vars.keys[AMIGA_KEY_J] = 1;
+				break;
+			case SDLK_m:
+				g_vars.keys[AMIGA_KEY_M] = 1;
+				break;
+			case SDLK_n:
+				g_vars.keys[AMIGA_KEY_N] = 1;
+				break;
+			case SDLK_s:
+				g_vars.keys[AMIGA_KEY_S] = 1;
+				break;
+			case SDLK_y:
+				g_vars.keys[AMIGA_KEY_Y] = 1;
+				break;
+			case SDLK_LSHIFT:
+				g_vars.keys[AMIGA_KEY_LSHIFT] = 1;
+				break;
+			case SDLK_RSHIFT:
+				g_vars.keys[AMIGA_KEY_RSHIFT] = 1;
+				break;
+			case SDLK_DOWN:
+				g_vars.keys[AMIGA_KEY_DOWN] = 1;
+				break;
+			case SDLK_SPACE:
+				g_vars.keys[AMIGA_KEY_SPACE] = 1;
+				break;
+			case SDLK_ESCAPE:
+				g_vars.keys[AMIGA_KEY_ESCAPE] = 1;
+				break;
+			}
+			break;
+		case SDL_KEYUP:
+			switch (ev.key.keysym.sym) {
+			case SDLK_j:
+				g_vars.keys[AMIGA_KEY_J] = 0;
+				g_vars.last_key_code = AMIGA_KEY_J;
+				break;
+			case SDLK_m:
+				g_vars.keys[AMIGA_KEY_M] = 0;
+				g_vars.last_key_code = AMIGA_KEY_M;
+				break;
+			case SDLK_n:
+				g_vars.keys[AMIGA_KEY_N] = 0;
+				g_vars.last_key_code = AMIGA_KEY_N;
+				break;
+			case SDLK_s:
+				g_vars.keys[AMIGA_KEY_S] = 0;
+				g_vars.last_key_code = AMIGA_KEY_S;
+				break;
+			case SDLK_y:
+				g_vars.keys[AMIGA_KEY_Y] = 0;
+				g_vars.last_key_code = AMIGA_KEY_Y;
+				break;
+			case SDLK_LSHIFT:
+				g_vars.keys[AMIGA_KEY_LSHIFT] = 0;
+				g_vars.last_key_code = AMIGA_KEY_LSHIFT;
+				break;
+			case SDLK_RSHIFT:
+				g_vars.keys[AMIGA_KEY_RSHIFT] = 0;
+				g_vars.last_key_code = AMIGA_KEY_RSHIFT;
+				break;
+			case SDLK_DOWN:
+				g_vars.keys[AMIGA_KEY_DOWN] = 0;
+				g_vars.last_key_code = AMIGA_KEY_DOWN;
+				break;
+			case SDLK_SPACE:
+				g_vars.keys[AMIGA_KEY_SPACE] = 0;
+				g_vars.last_key_code = AMIGA_KEY_SPACE;
+				break;
+			case SDLK_ESCAPE:
+				g_vars.keys[AMIGA_KEY_ESCAPE] = 0;
+				g_vars.last_key_code = AMIGA_KEY_ESCAPE;
+				break;
+			}
+			break;
+		}
+	}
+}
+
+static void main_loop(void *arg) {
+	int *previous_state = (int *)arg;
+	HandleEvents();
+	table_update();
+	g_vars.last_key_code = -1;
+	if (g_host.quit) {
+		return;
+	}
+	const int current_state = table_get_state();
+	if (current_state != *previous_state) {
+		fprintf(stdout, "State change %d -> %d\n", *previous_state, current_state);
+		*previous_state = current_state;
+	}
+	sound_update();
+	Draw(&g_data);
+	SDL_RenderClear(_renderer);
+	SDL_Rect src;
+	src.x = 0;
+	src.y = 0;
+	src.w = TABLE_W;
+	SDL_Rect dst;
+	dst.x = 0;
+	dst.y = 0;
+	int screen_w, screen_h;
+	SDL_RenderGetLogicalSize(_renderer, &screen_w, &screen_h);
+	dst.w = TABLE_W * screen_w / g_window_w;
+	dst.h = TABLE_H * screen_h / g_window_h;
+	if (g_scroll) {
+		src.y = g_vars.vscroll;
+		src.h = SCROLL_H;
+		dst.h = SCROLL_H * screen_h / g_window_h;
+	} else {
+		src.h = TABLE_H;
+	}
+	SDL_RenderCopy(_renderer, GetTexture(DRAW_SURFACE_TABLE), &src, &dst);
+	dst.x = 0;
+	dst.y = src.h * screen_h / g_window_h;
+	dst.w = LED_W * screen_w / g_window_w;
+	dst.h = LED_H * screen_h / g_window_h;
+	SDL_RenderCopy(_renderer, GetTexture(DRAW_SURFACE_LED), 0, &dst);
+	SDL_RenderPresent(_renderer);
+}
+
 int main(int argc, char *argv[]) {
 	const char *filePath = "AQUA.BIN";
 	bool scrolling = false;
 	bool fullscreen = false;
+	(void)argc;
+	(void)argv;
+	(void)fullscreen;
 
+#ifdef __EMSCRIPTEN__
+	filePath = "/AQUA.BIN";
+#else
 	if (argc == 2) {
 		struct stat st;
 		if (stat(argv[1], &st) == 0 && S_ISREG(st.st_mode)) {
@@ -169,6 +331,7 @@ int main(int argc, char *argv[]) {
 			return 0;
 		}
 	}
+#endif
 
 	g_host.Debug = Debug;
 	g_host.Warn = Warn;
@@ -191,6 +354,10 @@ int main(int argc, char *argv[]) {
 	g_host.FiniAudio = FiniAudio;
 	g_host.LockAudio = LockAudio;
 
+#ifdef __EMSCRIPTEN__
+	SDL_DisplayMode dm;
+	(void)dm;
+#else
 	SDL_DisplayMode dm;
 	if (SDL_GetDesktopDisplayMode(0, &dm) == 0) {
 		fprintf(stdout, "Desktop %d x %d at %d hz ", dm.w, dm.h, dm.refresh_rate);
@@ -214,15 +381,24 @@ int main(int argc, char *argv[]) {
 
 		}
 	}
+#endif
 	const int table_w = TABLE_W;
 	const int table_h = TABLE_H;
 	const int led_w = LED_W;
 	const int led_h = LED_H;
 	const int window_w = table_w;
 	const int window_h = (scrolling ? SCROLL_H : TABLE_H) + LED_H;
+#ifdef __EMSCRIPTEN__
+	const int h = window_h;
+	const int w = window_w;
+#else
 	const int h = !fullscreen ? window_h : (dm.h - 100);
 	const int w = !fullscreen ? window_w : (window_w * h / window_h);
+#endif
 	const int flags = SDL_WINDOW_RESIZABLE;
+	g_window_w = window_w;
+	g_window_h = window_h;
+	g_scroll = scrolling;
 	g_window = SDL_CreateWindow(NAME, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, flags);
 
 	_renderer = SDL_CreateRenderer(g_window, -1, SDL_RENDERER_ACCELERATED);
@@ -232,7 +408,10 @@ int main(int argc, char *argv[]) {
 	CreateSurface565(table_w, table_h);
 	CreateSurface565(led_w, led_h);
 
+	g_scroll = scrolling;
+#ifndef __EMSCRIPTEN__
 	InitAudio();
+#endif
 
 	InitPalette(&g_data, DRAW_SURFACE_TABLE);
 
@@ -241,137 +420,22 @@ int main(int argc, char *argv[]) {
 	g_vars.res = &g_data;
 	table_init();
 
+	Mixer_Init(AUDIO_SAMPLE_RATE, LockAudio);
 	sound_init();
 
+#ifndef __EMSCRIPTEN__
 	static const int interval = 1000 / GAME_HZ;
+#endif
 
 	g_host.quit = 0;
+
+#ifdef __EMSCRIPTEN__
+	emscripten_set_main_loop_arg(main_loop, &previous_state, 0, 1);
+	return 0;
+#else
 	while (!g_host.quit) {
 		const int next = SDL_GetTicks() + interval;
-		SDL_Event ev;
-		while (SDL_PollEvent(&ev)) {
-			switch (ev.type) {
-			case SDL_QUIT:
-				g_host.quit = 1;
-				break;
-			case SDL_KEYDOWN:
-				switch (ev.key.keysym.sym) {
-				case SDLK_j:
-					g_vars.keys[AMIGA_KEY_J] = 1;
-					break;
-				case SDLK_m:
-					g_vars.keys[AMIGA_KEY_M] = 1;
-					break;
-				case SDLK_n:
-					g_vars.keys[AMIGA_KEY_N] = 1;
-					break;
-				case SDLK_s:
-					g_vars.keys[AMIGA_KEY_S] = 1;
-					break;
-				case SDLK_y:
-					g_vars.keys[AMIGA_KEY_Y] = 1;
-					break;
-				case SDLK_LSHIFT:
-					g_vars.keys[AMIGA_KEY_LSHIFT] = 1;
-					break;
-				case SDLK_RSHIFT:
-					g_vars.keys[AMIGA_KEY_RSHIFT] = 1;
-					break;
-				case SDLK_DOWN:
-					g_vars.keys[AMIGA_KEY_DOWN] = 1;
-					break;
-				case SDLK_SPACE:
-					g_vars.keys[AMIGA_KEY_SPACE] = 1;
-					break;
-				case SDLK_ESCAPE:
-					g_vars.keys[AMIGA_KEY_ESCAPE] = 1;
-					break;
-				}
-				break;
-			case SDL_KEYUP:
-				switch (ev.key.keysym.sym) {
-				case SDLK_j:
-					g_vars.keys[AMIGA_KEY_J] = 0;
-					g_vars.last_key_code = AMIGA_KEY_J;
-					break;
-				case SDLK_m:
-					g_vars.keys[AMIGA_KEY_M] = 0;
-					g_vars.last_key_code = AMIGA_KEY_M;
-					break;
-				case SDLK_n:
-					g_vars.keys[AMIGA_KEY_N] = 0;
-					g_vars.last_key_code = AMIGA_KEY_N;
-					break;
-				case SDLK_s:
-					g_vars.keys[AMIGA_KEY_S] = 0;
-					g_vars.last_key_code = AMIGA_KEY_S;
-					break;
-				case SDLK_y:
-					g_vars.keys[AMIGA_KEY_Y] = 0;
-					g_vars.last_key_code = AMIGA_KEY_Y;
-					break;
-				case SDLK_LSHIFT:
-					g_vars.keys[AMIGA_KEY_LSHIFT] = 0;
-					g_vars.last_key_code = AMIGA_KEY_LSHIFT;
-					break;
-				case SDLK_RSHIFT:
-					g_vars.keys[AMIGA_KEY_RSHIFT] = 0;
-					g_vars.last_key_code = AMIGA_KEY_RSHIFT;
-					break;
-				case SDLK_DOWN:
-					g_vars.keys[AMIGA_KEY_DOWN] = 0;
-					g_vars.last_key_code = AMIGA_KEY_DOWN;
-					break;
-				case SDLK_SPACE:
-					g_vars.keys[AMIGA_KEY_SPACE] = 0;
-					g_vars.last_key_code = AMIGA_KEY_SPACE;
-					break;
-				case SDLK_ESCAPE:
-					g_vars.keys[AMIGA_KEY_ESCAPE] = 0;
-					g_vars.last_key_code = AMIGA_KEY_ESCAPE;
-					break;
-				}
-				break;
-			}
-		}
-		table_update();
-		g_vars.last_key_code = -1;
-		if (g_host.quit) {
-			break;
-		}
-		const int current_state = table_get_state();
-		if (current_state != previous_state) {
-			fprintf(stdout, "State change %d -> %d\n", previous_state, current_state);
-			previous_state = current_state;
-		}
-		sound_update();
-		Draw(&g_data);
-		SDL_RenderClear(_renderer);
-		SDL_Rect src;
-		src.x = 0;
-		src.y = 0;
-		src.w = TABLE_W;
-		SDL_Rect dst;
-		dst.x = 0;
-		dst.y = 0;
-		int screen_w, screen_h;
-		SDL_RenderGetLogicalSize(_renderer, &screen_w, &screen_h);
-		dst.w = TABLE_W * screen_w / window_w;
-		dst.h = TABLE_H * screen_h / window_h;
-		if (scrolling) {
-			src.y = g_vars.vscroll;
-			src.h = SCROLL_H;
-			dst.h = SCROLL_H * screen_h / window_h;
-		} else {
-			src.h = TABLE_H;
-		}
-		SDL_RenderCopy(_renderer, GetTexture(DRAW_SURFACE_TABLE), &src, &dst);
-		dst.x = 0;
-		dst.y = src.h * screen_h / window_h;
-		dst.w = LED_W * screen_w / window_w;
-		dst.h = LED_H * screen_h / window_h;
-		SDL_RenderCopy(_renderer, GetTexture(DRAW_SURFACE_LED), 0, &dst);
-		SDL_RenderPresent(_renderer);
+		main_loop(&previous_state);
 		const int delay = next - SDL_GetTicks();
 		if (delay < 10) {
 
@@ -384,4 +448,5 @@ int main(int argc, char *argv[]) {
 	SDL_DestroyWindow(g_window);
 	SDL_Quit();
 	return 0;
+#endif
 }

@@ -713,8 +713,7 @@ process_collision:
 					n0 = 16;
 				}
 				static const uint8_t _left_dive_ypos_bonus_lookup[] = { 1, 1, 1, 3, 3, 3, 3, 3, 2, 2, 2, 6, 6, 6, 6, 6, 4 };
-				n0 = _left_dive_ypos_bonus_lookup[n0];
-				g_vars.bonus_data[5] |= (1 << n0);
+				g_vars.bonus_data[5] = _left_dive_ypos_bonus_lookup[n0];
 				goto collision_response;
 			}
 
@@ -862,6 +861,7 @@ handle_collision:
 		} else if (n1 == 5) {
 
 			patch_phys_map_close();
+			g_vars.state.secret_passage_hits = 0;
 			g_vars.ball_xpos2 = 285;
 			g_vars.ball_ypos2 = 210;
 			g_vars.ball_exit_locked_counter = g_vars.ball_collision_table[n0].param1;
@@ -941,10 +941,9 @@ handle_collision:
 			if (g_vars.ball_yvel < 0) {
 				goto process_collision;
 			}
+			g_vars.bonus_data[7] |= 1 << 1;
 			if (g_vars.ball_xpos2 <= 147) {
 				g_vars.bonus_data[7] |= 1 << 0;
-			} else {
-				g_vars.bonus_data[7] |= 1 << 1;
 			}
 		}
 

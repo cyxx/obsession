@@ -59,7 +59,7 @@ static void ball_drained_set_music() {
 }
 
 static void ball_drained_reset_lights() {
-	if (g_vars.state.bonus_multiplier_hold == 0) {
+	if (g_vars.bonus_multiplier_hold == 0) {
 		reset_lights_multipliers();
 	}
 	reset_lights_starfish();
@@ -143,7 +143,7 @@ static void bonus_countdown_step() {
 static void state_bonus_countdown() {
 	bonus_countdown_step();
 	++g_vars.state_counter;
-	if (g_vars.state_counter > 90) {
+	if (g_vars.state_counter >= 90) {
 		g_vars.state_counter = 0;
 		g_vars.state_num = 7;
 	}
@@ -157,12 +157,12 @@ void clear_mission_state() {
 		g_vars.state.pearl_letter_timer = zero;
 		g_vars.pearl_letter_count = zero;
 	}
-	if (g_vars.state.bonus_multiplier_hold == 0) {
+	if (g_vars.bonus_multiplier_hold == 0) {
 		g_vars.bonus_multiplier = 1;
 		g_vars.bonus_score1_bcd = 0;
 		g_vars.bonus_score2_bcd = 0;
 	}
-	g_vars.state.bonus_multiplier_hold = 0;
+	g_vars.bonus_multiplier_hold = 0;
 }
 
 static void state_clear_mission() {

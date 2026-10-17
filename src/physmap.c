@@ -4,9 +4,10 @@
 static void patch_phys_map(uint8_t val) {
 	uint8_t *p = Resource_GetPhysMap(g_vars.res) + PHYSMAP_LAYER_OFFSET + 0x4ab0;
 	static const int16_t T[] = { 0, 0xaa, 0x154, 0x1fe, 0x2a8, 0x352, 0x3fc, 0x4a6 };
-	for (int i = 0; i < sizeof(T) / sizeof(T[0]); ++i) {
+	for (int i = 0; i < sizeof(T) / sizeof(T[0]) - 1; ++i) {
 		memset(p + T[i], val, 4);
 	}
+	memset(p + T[sizeof(T) / sizeof(T[0]) - 1], val, 2);
 }
 
 void patch_phys_map_open() {
